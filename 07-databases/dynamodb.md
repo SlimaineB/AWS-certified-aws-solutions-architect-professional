@@ -48,7 +48,7 @@
 
 ## DynamoDB Operation, Consistency and Performance
 
-- We can chose between to different capacity mode at table creation: on-demand and provisioned
+- We can chose between two different capacity mode at table creation: on-demand and provisioned
 - We may be able to switch between this capacity mode afterwards
 - On-demand capacity mode: 
     - Designed for unknown, unpredictable load
