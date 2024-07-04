@@ -99,8 +99,44 @@ Amazon DynamoDB is not ideal for the following situations:
 - DynamoDB replicates data cross AZs using storage nodes. Storage nodes have a leader node, which is elected from the existing nodes
 - Writes are directed to leader node
 - The leader nodes replicates data to other nodes, typically finishing within a few milliseconds
+  
+## Performance and Throttling
 
+- Throttling occurs when the configured RCU or WCU are exceeded.
+- May receive the ProvisionedThroughputExceededException error.
+- This error indicates that your request rate is too high for the read / write capacity provisioned for the table.
+- The AWS SDKs for DynamoDB automatically retry requests that receive this exception.
+- Your request is eventually successful, unless your retry queue is too large to finish.
+- 
+- Possible causes of performance issues:
+    - Hot keys – one partition key is being read too often.
+    - Hot partitions – when data access is imbalanced, a “hot” partition can receive a higher volume of read and write traffic compared to other partitions.
+    - Large items – large items consume more RCUs and WCUs.
+
+- Resolution:
+    - Reduce the frequency of requests and use exponential backoff.
+    - Try to design your application for uniform activity across all logical partition keys in the table and its secondary indexes.
+    - Use burst capacity effectively – DynamoDB currently retains up to 5 minutes (300 seconds) of unused read and write capacity which can be consumed quickly.
+    - 
 ## WCU/RCU Calculation
+
+- Read capacity unit (RCU):
+
+    - Each API call to read data from your table is a read request.
+    - Read requests can be strongly consistent, eventually consistent, or transactional.
+    - For items up to 4 KB in size, one RCU can perform one strongly consistent read request per second.
+    - Items larger than 4 KB require additional RCUs.
+    - For items up to 4 KB in size, one RCU can perform two eventually consistent read requests per second.
+    - Transactional read requests require two RCUs to perform one read per second for items up to 4 KB.
+    - For example, a strongly consistent read of an 8 KB item would require two RCUs, an eventually consistent read of an 8 KB item would require one RCU, and a transactional read of an 8 KB item would require four RCUs.
+
+- Write capacity unit (WCU):
+
+    - Each API call to write data to your table is a write request.
+    - For items up to 1 KB in size, one WCU can perform one standard write request per second.
+    - Items larger than 1 KB require additional WCUs.
+    - Transactional write requests require two WCUs to perform one write per second for items up to 1 KB.
+    - For example, a standard write request of a 1 KB item would require one WCU, a standard write request of a 3 KB item would require three WCUs, and a transactional write request of a 3 KB item would require six WCUs.
 
 - Example: we need to store 10 items per second, 2.5K average size per item
     - WCU required: 
@@ -177,6 +213,30 @@ Amazon DynamoDB is not ideal for the following situations:
 - Cache hits are returned in microseconds, cache misses in milliseconds
 - When writing data to DynamoDB, DAX uses write-through caching, the data is written at the same time to the cache as it is written to the DB
 - DAX is not suitable for applications requiring strongly consistent reads
+- DAX is used to improve READ performance (not writes).
+- You do not need to modify application logic, since DAX is compatible with existing DynamoDB API calls.
+- Ideal for read-heavy and bursty workloads such as auction applications, gaming, and retail sites when running special sales / promotions.
+- You can enable DAX with just a few clicks in the AWS Management Console or using the AWS SDK.
+- Just as with DynamoDB, you only pay for the capacity you provision.
+- Provisioned through clusters and charged by the node (runs on EC2 instances).
+- Pricing is per node-hour consumed and is dependent on the instance type you select.
+  
+- How it works:
+
+    - DAX is a write-through caching service – this means the data is written to the cache as well as the back-end store at the same time.
+    - Allows you to point your DynamoDB API calls at the DAX cluster and if the item is in the cache (cache hit), DAX returns the result to the application.
+    - If the item requested is not in the cache (cache miss) then DAX performs an Eventually Consistent GetItem operation against DynamoDB
+    - Retrieval of data from DAX reduces the read load on DynamoDB tables.
+    - This may result in being able to reduce the provisioned read capacity on the table.
+
+
+## DAX vs ElastiCache
+
+- DAX is optimized for DynamoDB.
+- DAX does not support lazy loading (uses write-through caching).
+- With ElastiCache you have more management overhead (e.g. invalidation).
+- With ElastiCache you need to modify application code to point to cache.
+- ElastiCache supports more datastores.
 
 ## DynamoDB Global Tables
 
@@ -190,10 +250,14 @@ Amazon DynamoDB is not ideal for the following situations:
 ## DynamoDB TTL
 
 - TTL = Time-to-Live
+- The TTL is enabled per row (you define a TTL column and add the expiry date / time there).
 - In order to use TTL we have to enable it on a table and select a specific attribute for the TTL
 - The attribute should contain a number representing an epoch (number of seconds)
 - A per-partition process periodically runs for checking the current time to the value in the TTL attribute
 - Items where the TTL attribute is older than the current time are set to expired
 - Another per-partition background process scans for expired items and removes them from tables and indexes, adding a delete event to the streams is enabled
 - These processes run on the background without affecting the performance of the table and without any additional charge
+- No extra cost and does not use WCU / RCU.
 - We can create a dedicated stream linked to the TTL processes, having 24h rolling window for deletes
+- Deleted items are also deleted from the LSI / GSI.
+- DynamoDB streams can help recover expired items.
