@@ -11,6 +11,29 @@
 - Provides automatic backups, point-in-time recovery and encryption at rest
 - Supports event-driven integration, provides actions when data is modified inside a table
 
+# DynamoDB AntiPattern
+
+Amazon DynamoDB is not ideal for the following situations:
+
+- Traditional RDS apps.
+- Joins and/or complex transactions.
+- BLOB data.
+- Large data with low I/O rate.
+
+# Access control
+
+- All authentication and access control is managed using IAM.
+- DynamoDB supports identity-based policies:
+    - Attach a permissions policy to a user or a group in your account.
+    - Attach a permissions policy to a role (grant cross-account permissions).
+    - DynamoDB doesn’t support resource-based policies.
+
+- You can use a special IAM condition to restrict user access to only their own records.
+- In DynamoDB, the primary resources are tables.
+- DynamoDB also supports additional resource types, indexes, and streams.
+- You can create indexes and streams only in the context of an existing DynamoDB table (subresources).
+- These resources and subresources have unique Amazon Resource Names (ARNs) associated with them, as shown in the following table.
+
 ## DynamoDB Tables
 
 - A table in DynamoDB is a grouping of items with the same primary key
